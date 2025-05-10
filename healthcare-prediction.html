@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
+    <title>Clever Care - Disease Prediction</title>
+    
+    <!-- Favicon -->
+    <link rel="shortcut icon" type="image/x-icon" href="assets/img/favicon.png">
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    
+    <!-- Fontawesome CSS -->
+    <link rel="stylesheet" href="assets/css/font-awesome.min.css">
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <!-- Header -->
+        <header class="header">
+            <!-- Include your existing header here -->
+        </header>
+        
+        <!-- Page Content -->
+        <div class="content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-md-8 offset-md-2">
+                        <!-- Disease Prediction Card -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h4 class="card-title">Disease Prediction System</h4>
+                            </div>
+                            <div class="card-body">
+                                <form id="predictionForm">
+                                    <div class="form-group">
+                                        <label>Enter your symptoms (comma-separated):</label>
+                                        <textarea class="form-control" id="symptoms" rows="3" placeholder="Example: fever, headache, fatigue"></textarea>
+                                        <small class="form-text text-muted">Loading valid symptoms...</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Common Symptoms:</label>
+                                        <div id="commonSymptoms" class="mb-3">
+                                            <!-- Will be populated with symptom chips -->
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Get Prediction</button>
+                                </form>
+                                
+                                <!-- Results Section -->
+                                <div id="results" class="mt-4" style="display: none;">
+                                    <h5>Prediction Results</h5>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6>Predicted Disease:</h6>
+                                            <p id="predictedDisease" class="text-primary"></p>
+                                            
+                                            <h6>Description:</h6>
+                                            <p id="diseaseDescription"></p>
+                                            
+                                            <h6>Precautions:</h6>
+                                            <ul id="precautionsList"></ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- jQuery -->
+    <script src="assets/js/jquery.min.js"></script>
+    
+    <!-- Bootstrap Core JS -->
+    <script src="assets/js/popper.min.js"></script>
+    <script src="assets/js/bootstrap.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        $(document).ready(function() {
+            // Load valid symptoms
+            $.get('http://localhost:5001/symptoms', function(data) {
+                const symptoms = data.symptoms;
+                const commonSymptomsDiv = $('#commonSymptoms');
+                
+                // Display first 15 symptoms as clickable chips
+                symptoms.slice(0, 15).forEach(symptom => {
+                    const chip = $('<span>')
+                        .addClass('badge badge-info mr-2 mb-2 symptom-chip')
+                        .css('cursor', 'pointer')
+                        .text(symptom);
+                    commonSymptomsDiv.append(chip);
+                });
+                
+                // Update helper text
+                $('.form-text').text('Click on symptoms below or type your symptoms separated by commas');
+                
+                // Make chips clickable
+                $('.symptom-chip').click(function() {
+                    const symptom = $(this).text();
+                    const currentSymptoms = $('#symptoms').val();
+                    const symptomsArray = currentSymptoms ? currentSymptoms.split(',').map(s => s.trim()) : [];
+                    
+                    if (!symptomsArray.includes(symptom)) {
+                        symptomsArray.push(symptom);
+                        $('#symptoms').val(symptomsArray.join(', '));
+                    }
+                });
+            });
+
+            $('#predictionForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                const symptoms = $('#symptoms').val().split(',').map(s => s.trim()).filter(s => s);
+                
+                if (symptoms.length === 0) {
+                    alert('Please enter at least one symptom');
+                    return;
+                }
+                
+                // Show loading state
+                $(this).find('button').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+                
+                // Make API call
+                $.ajax({
+                    url: 'http://localhost:5001/predict',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ symptoms }),
+                    success: function(response) {
+                        // Display results
+                        $('#predictedDisease').text(response.disease);
+                        $('#diseaseDescription').text(response.description);
+                        
+                        // Clear and populate precautions
+                        const precautionsList = $('#precautionsList');
+                        precautionsList.empty();
+                        response.precautions.forEach(precaution => {
+                            precautionsList.append(`<li>${precaution}</li>`);
+                        });
+                        
+                        // Show results section
+                        $('#results').show();
+                    },
+                    error: function(xhr, status, error) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.valid_symptoms) {
+                                alert('Error: ' + response.message + '\nExample valid symptoms: ' + response.valid_symptoms.join(', '));
+                            } else {
+                                alert('Error getting prediction: ' + error + '\nPlease try again.');
+                            }
+                        } catch (e) {
+                            alert('Error getting prediction. Please try again.');
+                        }
+                        console.error('Error:', xhr.responseText);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        $('#predictionForm button').prop('disabled', false).text('Get Prediction');
+                    }
+                });
+            });
+        });
+    </script>
+
+    <!-- Add some custom styles -->
+    <style>
+        .symptom-chip {
+            padding: 8px 15px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        .symptom-chip:hover {
+            background-color: #17a2b8;
+            transform: scale(1.05);
+        }
+    </style>
+</body>
+</html> 
